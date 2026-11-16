@@ -3,8 +3,16 @@
 Bootstrap 区间估计的真实业务分析小型项目。完整模拟客户、痛点、上下游、算法公式与一天工作剧本见 [BUSINESS.md](BUSINESS.md)。
 
 ## 模块与业务流程
-数据接入（JSON/CSV、字段验证、批次指纹）→ 参数化分析（异步 Python worker）→ 结果复核（指标、图形、明细、解释、批准）→ 定时分发（本地收件箱、CSV/JSON、SHA256）；另有业务总览和审计轨迹。
-三个贯穿全栈的实体：Dataset 数据批次、Job 分析任务、Report 分发计划；辅助 User、Audit、Delivery。
+站点台账快照（按站点 + 递增代号接收全量台账）→ 参数化分析（异步 Python worker）→ 结果复核（指标、图形、明细、解释、批准）→ 定时分发（本地收件箱、CSV/JSON、SHA256）；另有业务总览和审计轨迹。
+四个贯穿全栈的实体：Station 校准站、StationSnapshot 台账快照、Dataset 不可变台账批次、Job 分析任务、Report 分发计划；辅助 User、Audit、Delivery。
+
+### 快照接收语义
+- 回传的是**全量**台账，按 `站点代号 + 代号` 接收；新代发布时整份替换本站台账，其他站不受影响。
+- 消失的读数退出后续分析；新分析只能绑定各站**当前已发布**台账。历史任务与已归档简报保留创建时的完整读数。
+- 旧代晚到 → 409 拒收；同代不同内容 → 409 冲突；同代相同内容重试 → 返回已发布快照，不新增批次。
+- 校验失败或写入中断 → 保留旧代继续服务；`progress` 记录已提交条数，以相同内容重试即可续传。
+- 逐条写入完成且整份指纹校验通过后才原子发布；并发接收不同代时，已发布的新代不会被旧执行覆盖。
+- 页面「数据接入」可接收 JSON/CSV，校验并预览新增 / 修改 / 撤销，以及当前代号。`POST /stations/{code}/snapshots?dry_run=true` 只校验不发布。
 
 ## 快速启动
 ```bash
@@ -24,7 +32,7 @@ docker compose exec -T backend python -m scripts.seed_demo
 
 ## 技术与本地开发
 Python 3.12 / FastAPI / SQLAlchemy / NumPy / SciPy / scikit-learn；PostgreSQL 16；Redis 7；Nginx；原生 HTML CSS JavaScript ES modules（用户指定）。后端所有校验、持久化和算法在服务端。无前端打包步骤。
-后端：安装 backend/requirements.txt，设置 DATABASE_URL、REDIS_URL、JWT_SECRET、ARTIFACT_DIR 后在 backend/ 执行 `python -m migrations.initial`、`python -m scripts.seed_demo`、`uvicorn src.main:app`，另开 `python -m src.worker`。前端使用带 /api 反向代理的 Nginx，直接打开 index.html 不支持 API。
+后端：安装 backend/requirements.txt，设置 DATABASE_URL、REDIS_URL、JWT_SECRET、ARTIFACT_DIR 后在 backend/ 执行 `python -m migrations.initial`、`python -m scripts.seed_demo`、`uvicorn src.main:app`，另开 `python -m src.worker`。迁移可重复执行，会给既有库补上站点/代号相关列。前端使用带 /api 反向代理的 Nginx，直接打开 index.html 不支持 API。
 
 ## 目录与工程约定
 backend/src/{models,schemas,services,routes,controllers,middlewares,constants,config,utils}；backend/scripts/seed_demo.py；backend/migrations/initial.py。

@@ -1,11 +1,17 @@
-from sqlalchemy import String, JSON, Double, ForeignKey, Boolean
+from sqlalchemy import String, JSON, Double, ForeignKey, Boolean, Integer
 from sqlalchemy.orm import Mapped, mapped_column
 from src.config.database import Base
+
+
 class Job(Base):
     __tablename__ = 'jobs'
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(160))
     dataset_id: Mapped[int] = mapped_column(ForeignKey('datasets.id'))
+    # 创建任务时冻结的快照标识；后续换代不影响这次分析的输入。
+    station_code: Mapped[str] = mapped_column(String(80), default='', server_default='')
+    dataset_generation: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    dataset_checksum: Mapped[str] = mapped_column(String(64), default='', server_default='')
     params: Mapped[dict] = mapped_column(JSON, default=dict)
     status: Mapped[str] = mapped_column(String(20), default='queued')
     result: Mapped[dict] = mapped_column(JSON, default=dict)

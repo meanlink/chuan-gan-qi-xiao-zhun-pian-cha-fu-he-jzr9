@@ -1,6 +1,6 @@
 import time, os, csv, io, hashlib, json
 from fastapi import HTTPException
-from src.models import Job, Report, Delivery
+from src.models import Job, Report, Delivery, Dataset
 from src.config.settings import ARTIFACT_DIR
 def create(db, data):
     j=db.get(Job,data.job_id)
@@ -29,6 +29,10 @@ def deliver(db, report):
     delivery.filename=f'report-{report.id}-delivery-{delivery.id}.csv'
     os.makedirs(ARTIFACT_DIR,exist_ok=True)
     with open(os.path.join(ARTIFACT_DIR,delivery.filename),'wb') as f:f.write(data)
-    with open(os.path.join(ARTIFACT_DIR,delivery.filename+'.json'),'w') as f: json.dump({'job':j.name,'params':j.params,'result':j.result,'checksum':delivery.checksum},f,ensure_ascii=False,allow_nan=False)
+    # 简报随批归档创建时绑定的整份台账，之后换代不改写历史简报的读数。
+    dataset=db.get(Dataset,j.dataset_id)
+    with open(os.path.join(ARTIFACT_DIR,delivery.filename+'.json'),'w') as f: json.dump({'job':j.name,'params':j.params,'result':j.result,'checksum':delivery.checksum,
+        'binding':{'station':j.station_code,'generation':j.dataset_generation,'checksum':j.dataset_checksum},
+        'readings':dataset.records if dataset else []},f,ensure_ascii=False,allow_nan=False)
     report.next_run=time.time()+report.interval_seconds
     return delivery
